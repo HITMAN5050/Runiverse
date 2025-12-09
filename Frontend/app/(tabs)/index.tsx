@@ -189,6 +189,10 @@ export default function Index() {
    const [isLoadingRouteHistory, setIsLoadingRouteHistory] = useState(true);
    const [isCalorieExpanded, setIsCalorieExpanded] = useState(true);
 
+   const expandProgress = useSharedValue(1);
+   const borderPulse = useSharedValue(0);
+   const ctaPulse = useSharedValue(1);
+
    useEffect(() => {
       expandProgress.value = withTiming(isCalorieExpanded ? 1 : 0, {
          duration: 300,
@@ -209,10 +213,6 @@ export default function Index() {
       ? [colors.status.success, colors.status.info]
       : [colors.accent.secondary, colors.status.info]) as [string, string];
    const withAlpha = (hex: string, alpha: string) => (hex.length === 7 ? `${hex}${alpha}` : hex);
-
-   const borderPulse = useSharedValue(0);
-   const ctaPulse = useSharedValue(1);
-   const expandProgress = useSharedValue(1);
 
    useEffect(() => {
       borderPulse.value = withRepeat(
