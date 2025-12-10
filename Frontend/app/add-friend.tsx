@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Image,
@@ -8,12 +8,17 @@ import {
   Text,
   TextInput,
   View,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { ArrowLeft, MapPin, Search, Users } from "lucide-react-native";
+import axios from "axios";
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { useTheme } from "@/context/ThemeContext";
+import useDebounce from "@/hooks/useDebounce";
+import { api } from "@/services/api";
+import { authService } from "@/services/AuthService";
 import { useStore } from "@/store/useStore";
 
 type FriendStatus = "add" | "pending" | "friends" | "invite";
@@ -277,6 +282,7 @@ export default function AddFriendScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const userCity = useStore((state) => state.user?.city?.trim());
+  const setSearchResults = useStore((state) => state.setSearchResults);
 
   const [activeTab, setActiveTab] = useState<"city" | "contacts">("city");
   const [searchQuery, setSearchQuery] = useState("");
@@ -284,8 +290,12 @@ export default function AddFriendScreen() {
   const [contacts, setContacts] = useState<ContactFriend[]>(mockContacts);
   const [contactsPermission, setContactsPermission] = useState<"unknown" | "granted">("unknown");
   const [hasLoadedContacts, setHasLoadedContacts] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const defaultCity = userCity && userCity.length > 0 ? userCity : "Gandhinagar";
   const [selectedCity, setSelectedCity] = useState(defaultCity);
+  const debouncedQuery = useDebounce(searchQuery, 500);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef(true);
 
   const bgClass = isDark ? "bg-[#0f1014]" : "bg-gray-50";
   const textPrimary = isDark ? "text-white" : "text-gray-900";
@@ -316,6 +326,56 @@ export default function AddFriendScreen() {
       return inSearch;
     });
   }, [contacts, searchQuery]);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!debouncedQuery.trim()) {
+      abortControllerRef.current?.abort();
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const fetchSearchResults = async () => {
+      try {
+        setIsSearching(true);
+        const token = authService.getToken() || undefined;
+        const response = await axios.get(`${api.baseURL}/api/users/search`, {
+          params: { query: debouncedQuery },
+          signal: controller.signal,
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (!isMountedRef.current || controller.signal.aborted) return;
+
+        const payload = response.data?.data ?? response.data?.results ?? [];
+        setSearchResults(Array.isArray(payload) ? payload : []);
+      } catch (error: any) {
+        if (controller.signal.aborted) return;
+        console.warn("Search request failed:", error?.message || error);
+      } finally {
+        if (isMountedRef.current && !controller.signal.aborted) {
+          setIsSearching(false);
+        }
+      }
+    };
+
+    fetchSearchResults();
+
+    return () => {
+      controller.abort();
+    };
+  }, [debouncedQuery, setSearchResults]);
 
   const handleCityAction = (id: string, status: FriendStatus) => {
     setCityFriends((prev) =>
@@ -473,6 +533,9 @@ export default function AddFriendScreen() {
               onChangeText={setSearchQuery}
               className={`ml-3 flex-1 text-base ${textPrimary}`}
             />
+          {isSearching && (
+            <ActivityIndicator size="small" color={isDark ? "#CBD5E1" : "#2563EB"} />
+          )}
           </View>
 
           {activeTab === "city" && (

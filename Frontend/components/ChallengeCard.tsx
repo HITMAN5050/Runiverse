@@ -11,7 +11,7 @@ export function ChallengeCard({ challenge, index = 0 }: { challenge: Challenge; 
   }));
   return (
     <Animated.View
-      entering={FadeInDown.duration(450).delay(index * 60)}
+      entering={FadegInDown.duration(450).delay(index * 60)}
       className="bg-card-light dark:bg-card-dark p-4 rounded-2xl mb-4"
       style={{
         shadowColor: "#6A5ACD",
